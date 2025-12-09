@@ -100,6 +100,7 @@ Total Value = Quantity × Live Price
 | Ripple    | `ripple`  |
 | Solana    | `solana`  |
 
+Full list available at: [https://www.coingecko.com](https://www.coingecko.com)
 
 ## 👨‍🎓 Author
 
