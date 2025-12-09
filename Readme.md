@@ -103,7 +103,7 @@ Total Value = Quantity × Live Price
 
 ## 👨‍🎓 Author
 
-Sameer Yadav
+Sameer Yadav `\n`
 B.Tech Computer Science
 
 
