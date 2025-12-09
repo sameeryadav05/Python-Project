@@ -1,116 +1,131 @@
-import json
+import tkinter as tk
+from tkinter import messagebox
+import requests
+
+# ----------------- BACKEND -----------------
 
 class Portfolio:
     def __init__(self):
-        self.holdings = []  # List of dicts: [{'id': 'bitcoin', 'amount': 1.0}, ...]
-        self.prices = {}  # Dict to cache prices: {'bitcoin': 50000.0, ...}
+        self.holdings = []
+        self.prices = {}
 
     def add_crypto(self, crypto_id, amount):
-        """Add a cryptocurrency to the portfolio."""
         if amount <= 0:
-            raise ValueError("Amount must be positive.")
-        # Check if already exists, if so, update amount
-        for holding in self.holdings:
-            if holding['id'] == crypto_id:
-                holding['amount'] += amount
+            raise ValueError("Amount must be positive")
+
+        for h in self.holdings:
+            if h['id'] == crypto_id:
+                h['amount'] += amount
                 return
-        self.holdings.append({'id': crypto_id, 'amount': amount})
+
+        self.holdings.append({"id": crypto_id, "amount": amount})
 
     def remove_crypto(self, crypto_id):
-        """Remove a cryptocurrency from the portfolio."""
         self.holdings = [h for h in self.holdings if h['id'] != crypto_id]
 
     def update_amount(self, crypto_id, new_amount):
-        """Update the amount of a cryptocurrency."""
-        if new_amount <= 0:
-            raise ValueError("Amount must be positive.")
-        for holding in self.holdings:
-            if holding['id'] == crypto_id:
-                holding['amount'] = new_amount
+        for h in self.holdings:
+            if h['id'] == crypto_id:
+                h['amount'] = new_amount
                 return
-        raise ValueError(f"Cryptocurrency {crypto_id} not in portfolio.")
+        raise ValueError("Crypto not found")
 
     def fetch_prices(self):
-        """Fetch current prices for all holdings using CoinGecko API."""
         if not self.holdings:
-            return
-        ids = [h['id'] for h in self.holdings]
-        url = f"https://api.coingecko.com/api/v3/simple/price?ids={','.join(ids)}&vs_currencies=usd"
-        try:
-            response = requests.get(url)
-            response.raise_for_status()  # Raises HTTPError for bad responses
-            data = response.json()
-            self.prices = {crypto_id: data[crypto_id]['usd'] for crypto_id in ids if crypto_id in data}
-        except requests.exceptions.RequestException as e:
-            print(f"Error fetching prices: {e}")
-            self.prices = {}  # Reset prices on error
-        except json.JSONDecodeError as e:
-            print(f"Error parsing JSON: {e}")
-            self.prices = {}
+            raise ValueError("Portfolio empty")
 
-    def calculate_value(self):
-        """Calculate the total value of the portfolio."""
-        total = 0.0
-        for holding in self.holdings:
-            crypto_id = holding['id']
-            amount = holding['amount']
-            price = self.prices.get(crypto_id, 0.0)
-            total += amount * price
+        ids = ",".join([h["id"] for h in self.holdings])
+        url = f"https://api.coingecko.com/api/v3/simple/price?ids={ids}&vs_currencies=usd"
+
+        res = requests.get(url, timeout=10)
+        res.raise_for_status()
+        data = res.json()
+        self.prices = {cid: data[cid]["usd"] for cid in data}
+
+    def total_value(self):
+        total = 0
+        for h in self.holdings:
+            total += h["amount"] * self.prices.get(h["id"], 0)
         return total
 
-    def display_portfolio(self):
-        """Display the portfolio holdings and total value."""
-        if not self.holdings:
-            print("Portfolio is empty.")
-            return
-        print("Portfolio Holdings:")
-        for holding in self.holdings:
-            crypto_id = holding['id']
-            amount = holding['amount']
-            price = self.prices.get(crypto_id, 'N/A')
-            value = amount * price if isinstance(price, (int, float)) else 'N/A'
-            print(f"  {crypto_id}: {amount} units @ ${price} each = ${value}")
-        total_value = self.calculate_value()
-        print(f"Total Portfolio Value: ${total_value:.2f}")
+# ----------------- GUI -----------------
 
-def main():
-    portfolio = Portfolio()
-    while True:
-        print("\nPortfolio Tracker Menu:")
-        print("1. Add Cryptocurrency")
-        print("2. Remove Cryptocurrency")
-        print("3. Update Amount")
-        print("4. Fetch Prices and Display Portfolio")
-        print("5. Exit")
-        choice = input("Choose an option: ").strip()
-        
-        if choice == '1':
-            crypto_id = input("Enter cryptocurrency ID (e.g., bitcoin): ").strip().lower()
-            try:
-                amount = float(input("Enter amount: "))
-                portfolio.add_crypto(crypto_id, amount)
-                print(f"Added {amount} of {crypto_id}.")
-            except ValueError as e:
-                print(f"Error: {e}")
-        elif choice == '2':
-            crypto_id = input("Enter cryptocurrency ID to remove: ").strip().lower()
-            portfolio.remove_crypto(crypto_id)
-            print(f"Removed {crypto_id}.")
-        elif choice == '3':
-            crypto_id = input("Enter cryptocurrency ID: ").strip().lower()
-            try:
-                new_amount = float(input("Enter new amount: "))
-                portfolio.update_amount(crypto_id, new_amount)
-                print(f"Updated {crypto_id} to {new_amount}.")
-            except ValueError as e:
-                print(f"Error: {e}")
-        elif choice == '4':
-            portfolio.fetch_prices()
-            portfolio.display_portfolio()
-        elif choice == '5':
-            break
-        else:
-            print("Invalid choice. Try again.")
+portfolio = Portfolio()
 
-if __name__ == "__main__":
-    main()
+root = tk.Tk()
+root.title("Crypto Portfolio Tracker")
+root.geometry("600x450")
+
+# ------------ INPUT FIELDS ------------
+
+tk.Label(root, text="Crypto ID (bitcoin):").pack()
+crypto_entry = tk.Entry(root)
+crypto_entry.pack()
+
+tk.Label(root, text="Amount:").pack()
+amount_entry = tk.Entry(root)
+amount_entry.pack()
+
+# ------------ FUNCTIONS ------------
+
+def add_crypto():
+    try:
+        cid = crypto_entry.get().strip().lower()
+        amt = float(amount_entry.get())
+        portfolio.add_crypto(cid, amt)
+        messagebox.showinfo("Success", "Coin Added")
+        show_portfolio()
+    except Exception as e:
+        messagebox.showerror("Error", str(e))
+
+def remove_crypto():
+    cid = crypto_entry.get().strip().lower()
+    portfolio.remove_crypto(cid)
+    show_portfolio()
+    messagebox.showinfo("Removed", "Coin Removed")
+
+def update_crypto():
+    try:
+        cid = crypto_entry.get().strip().lower()
+        amt = float(amount_entry.get())
+        portfolio.update_amount(cid, amt)
+        show_portfolio()
+        messagebox.showinfo("Updated", "Amount Updated")
+    except Exception as e:
+        messagebox.showerror("Error", str(e))
+
+def fetch_prices():
+    try:
+        portfolio.fetch_prices()
+        show_portfolio()
+        messagebox.showinfo("Updated", "Prices Fetched")
+    except Exception as e:
+        messagebox.showerror("API Error", str(e))
+
+def show_portfolio():
+    display.delete("1.0", tk.END)
+
+    if not portfolio.holdings:
+        display.insert(tk.END, "Portfolio is empty\n")
+        return
+
+    for h in portfolio.holdings:
+        price = portfolio.prices.get(h["id"], "N/A")
+        value = h["amount"] * price if isinstance(price, float) else "N/A"
+        display.insert(tk.END, f"{h['id']} | {h['amount']} | ${price} | ${value}\n")
+
+    display.insert(tk.END, f"\nTotal Value: ${portfolio.total_value():.2f}")
+
+# ------------ BUTTONS ------------
+
+tk.Button(root, text="Add", width=15, command=add_crypto).pack(pady=4)
+tk.Button(root, text="Remove", width=15, command=remove_crypto).pack(pady=4)
+tk.Button(root, text="Update", width=15, command=update_crypto).pack(pady=4)
+tk.Button(root, text="Fetch Live Prices", width=20, command=fetch_prices).pack(pady=4)
+
+# ------------ DISPLAY ------------
+
+display = tk.Text(root, height=12)
+display.pack(pady=10)
+
+root.mainloop()
